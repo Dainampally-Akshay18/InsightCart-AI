@@ -1,0 +1,601 @@
+/**
+ * Dashboard Page
+ * Main analytics dashboard with dataset upload, summary cards, and charts
+ */
+
+import { useState, useEffect } from 'react';
+import Upload from '../components/Upload';
+import SummaryCards from '../components/SummaryCards';
+import ProductPopularityChart from '../components/Charts/ProductPopularityChart';
+import AgeSpendingChart from '../components/Charts/AgeSpendingChart';
+import GenderDistributionChart from '../components/Charts/GenderDistributionChart';
+import LocationDistributionChart from '../components/Charts/LocationDistributionChart';
+import { useDataset } from '../utils/useDataset';
+import { 
+  calculateSummary, 
+  getProductPopularity, 
+  getAgeGroupSpending, 
+  getGenderDistribution,
+  getLocationDistribution
+} from '../utils/analytics';
+import { parseCSV } from '../utils/parser';
+
+// Default dataset (provided in PRD)
+const DEFAULT_DATASET_CSV = `CustomerID,Gender,Age,Location,Product,Category,PurchaseAmount
+1,Male,29,Mumbai,Smartphone,Electronics,1180
+2,Male,57,Delhi,Running Shoes,Sports,18246
+3,Female,31,Bangalore,T-shirt,Fashion,52048
+4,Male,51,Mumbai,Smartphone,Electronics,47563
+5,Male,56,Delhi,Football,Sports,53502
+6,Female,35,Delhi,Smartphone,Electronics,57615
+7,Female,21,Mumbai,Running Shoes,Sports,43743
+8,Female,20,Bangalore,Cricket Bat,Sports,49298
+9,Female,28,Mumbai,Smartwatch,Electronics,58843
+10,Male,52,Bangalore,Headphones,Electronics,45139
+11,Male,39,Delhi,Fruits,Grocery,27274
+12,Male,60,Hyderabad,Fruits,Grocery,52500
+13,Male,50,Delhi,Jacket,Fashion,33677
+14,Male,48,Mumbai,Shoes,Fashion,26243
+15,Female,38,Mumbai,Jacket,Fashion,41250
+16,Male,59,Delhi,Jacket,Fashion,18397
+17,Female,35,Hyderabad,Headphones,Electronics,6519
+18,Female,20,Chennai,T-shirt,Fashion,2671
+19,Female,26,Delhi,Rice,Grocery,8257
+20,Female,46,Hyderabad,Milk,Grocery,39420
+21,Female,30,Mumbai,Smartwatch,Electronics,21387
+22,Female,42,Hyderabad,Gym Gloves,Sports,15664
+23,Female,54,Mumbai,Vegetables,Grocery,36740
+24,Male,60,Hyderabad,Jacket,Fashion,3161
+25,Male,50,Delhi,Smartphone,Electronics,57915
+26,Male,22,Delhi,Milk,Grocery,27777
+27,Male,18,Chennai,Laptop,Electronics,6385
+28,Male,55,Chennai,Smartphone,Electronics,27673
+29,Female,52,Chennai,Milk,Grocery,47603
+30,Female,35,Bangalore,Gym Gloves,Sports,45099
+31,Female,49,Hyderabad,Jacket,Fashion,53307
+32,Male,60,Chennai,Milk,Grocery,45095
+33,Female,40,Hyderabad,T-shirt,Fashion,42303
+34,Female,53,Delhi,Smartwatch,Electronics,16585
+35,Female,50,Hyderabad,Handbag,Fashion,34233
+36,Male,23,Bangalore,Football,Sports,41443
+37,Female,38,Hyderabad,Laptop,Electronics,5911
+38,Male,23,Chennai,Smartphone,Electronics,42792
+39,Male,41,Bangalore,Cricket Bat,Sports,4458
+40,Female,46,Delhi,Smartphone,Electronics,46281
+41,Male,41,Chennai,Handbag,Fashion,639
+42,Female,24,Mumbai,T-shirt,Fashion,20196
+43,Female,40,Chennai,Tennis Racket,Sports,10008
+44,Female,49,Delhi,Smartwatch,Electronics,8434
+45,Female,33,Mumbai,Shoes,Fashion,37944
+46,Male,36,Mumbai,Smartwatch,Electronics,31618
+47,Male,37,Delhi,Cricket Bat,Sports,25065
+48,Male,53,Delhi,Tablet,Electronics,55895
+49,Female,33,Hyderabad,T-shirt,Fashion,3530
+50,Male,47,Delhi,Snacks,Grocery,15089
+51,Female,29,Delhi,Running Shoes,Sports,10159
+52,Female,56,Hyderabad,Smartwatch,Electronics,12473
+53,Female,55,Mumbai,Laptop,Electronics,41004
+54,Female,20,Mumbai,Shoes,Fashion,7252
+55,Female,51,Mumbai,T-shirt,Fashion,10169
+56,Male,19,Bangalore,T-shirt,Fashion,52587
+57,Male,30,Hyderabad,Cricket Bat,Sports,46646
+58,Female,33,Mumbai,Snacks,Grocery,5620
+59,Male,29,Bangalore,Headphones,Electronics,8887
+60,Female,51,Bangalore,Vegetables,Grocery,43941
+61,Female,51,Hyderabad,Running Shoes,Sports,33756
+62,Female,43,Chennai,Snacks,Grocery,18260
+63,Female,54,Mumbai,Jacket,Fashion,54371
+64,Male,32,Hyderabad,Cricket Bat,Sports,36236
+65,Female,20,Chennai,T-shirt,Fashion,15149
+66,Female,37,Bangalore,Rice,Grocery,56004
+67,Male,29,Delhi,Jeans,Fashion,21281
+68,Male,21,Hyderabad,Football,Sports,32081
+69,Male,49,Delhi,Headphones,Electronics,42377
+70,Female,19,Delhi,Handbag,Fashion,50011
+71,Male,47,Mumbai,Tennis Racket,Sports,36314
+72,Male,52,Hyderabad,Cricket Bat,Sports,42913
+73,Male,46,Bangalore,Smartwatch,Electronics,41750
+74,Female,45,Hyderabad,Jacket,Fashion,16879
+75,Male,35,Mumbai,Tennis Racket,Sports,27310
+76,Male,21,Delhi,Football,Sports,30026
+77,Female,37,Delhi,Laptop,Electronics,20300
+78,Male,30,Delhi,T-shirt,Fashion,19852
+79,Male,56,Bangalore,Running Shoes,Sports,7716
+80,Female,22,Chennai,Handbag,Fashion,8196
+81,Female,35,Mumbai,Jeans,Fashion,23534
+82,Male,56,Mumbai,Vegetables,Grocery,41744
+83,Female,46,Delhi,Smartphone,Electronics,19177
+84,Female,54,Mumbai,Milk,Grocery,34928
+85,Male,30,Mumbai,Tablet,Electronics,24435
+86,Female,53,Delhi,Vegetables,Grocery,35650
+87,Male,29,Chennai,Smartwatch,Electronics,13583
+88,Female,29,Delhi,Headphones,Electronics,34243
+89,Male,54,Delhi,Gym Gloves,Sports,53180
+90,Male,35,Hyderabad,Running Shoes,Sports,1655
+91,Female,56,Hyderabad,Jeans,Fashion,37079
+92,Male,38,Delhi,Gym Gloves,Sports,32221
+93,Female,27,Hyderabad,Jacket,Fashion,31667
+94,Male,25,Bangalore,Handbag,Fashion,7154
+95,Female,33,Bangalore,Running Shoes,Sports,11301
+96,Female,53,Hyderabad,Jeans,Fashion,30957
+97,Female,48,Chennai,Gym Gloves,Sports,19618
+98,Male,57,Delhi,Laptop,Electronics,44514
+99,Male,38,Mumbai,Tablet,Electronics,59933
+100,Male,44,Chennai,Vegetables,Grocery,23626
+101,Female,24,Delhi,Smartphone,Electronics,24775
+102,Male,27,Mumbai,Snacks,Grocery,50684
+103,Female,23,Delhi,Smartphone,Electronics,29349
+104,Female,37,Chennai,T-shirt,Fashion,22096
+105,Male,18,Mumbai,Tablet,Electronics,29530
+106,Male,48,Delhi,Vegetables,Grocery,49349
+107,Female,34,Hyderabad,Jacket,Fashion,47833
+108,Female,34,Bangalore,Gym Gloves,Sports,37982
+109,Male,22,Hyderabad,Football,Sports,56221
+110,Male,49,Delhi,Cricket Bat,Sports,3820
+111,Female,42,Chennai,Running Shoes,Sports,52654
+112,Male,32,Mumbai,Cricket Bat,Sports,34370
+113,Male,24,Mumbai,Cricket Bat,Sports,53522
+114,Male,26,Bangalore,Running Shoes,Sports,3245
+115,Female,38,Hyderabad,Laptop,Electronics,49691
+116,Female,18,Chennai,Jacket,Fashion,48530
+117,Female,22,Hyderabad,Tablet,Electronics,52420
+118,Male,53,Bangalore,Handbag,Fashion,20663
+119,Male,57,Mumbai,Fruits,Grocery,20996
+120,Male,53,Bangalore,Smartwatch,Electronics,35895
+121,Male,53,Hyderabad,Jeans,Fashion,36522
+122,Female,60,Mumbai,Jacket,Fashion,50696
+123,Male,45,Delhi,Gym Gloves,Sports,19837
+124,Male,22,Hyderabad,Smartphone,Electronics,57745
+125,Female,26,Hyderabad,Headphones,Electronics,59727
+126,Male,43,Bangalore,Tablet,Electronics,38101
+127,Male,34,Delhi,Snacks,Grocery,49027
+128,Female,54,Bangalore,Gym Gloves,Sports,44407
+129,Male,36,Mumbai,Rice,Grocery,35481
+130,Female,55,Delhi,Smartwatch,Electronics,1309
+131,Female,45,Chennai,Milk,Grocery,31465
+132,Female,52,Chennai,Smartwatch,Electronics,48254
+133,Male,24,Hyderabad,Smartwatch,Electronics,31763
+134,Female,59,Chennai,Snacks,Grocery,43757
+135,Female,27,Bangalore,Headphones,Electronics,16949
+136,Female,60,Mumbai,Milk,Grocery,50547
+137,Male,44,Bangalore,Fruits,Grocery,27231
+138,Male,52,Bangalore,Rice,Grocery,36905
+139,Male,20,Hyderabad,Milk,Grocery,28235
+140,Male,37,Chennai,Handbag,Fashion,58088
+141,Female,35,Delhi,Cricket Bat,Sports,48902
+142,Male,41,Chennai,Jacket,Fashion,30641
+143,Female,42,Mumbai,Smartwatch,Electronics,16370
+144,Male,31,Mumbai,Laptop,Electronics,51391
+145,Male,38,Mumbai,Jacket,Fashion,2641
+146,Female,41,Hyderabad,Jeans,Fashion,44649
+147,Female,46,Hyderabad,Tennis Racket,Sports,33979
+148,Female,45,Chennai,Vegetables,Grocery,9679
+149,Female,53,Hyderabad,Cricket Bat,Sports,56627
+150,Male,57,Mumbai,Jacket,Fashion,35673
+151,Male,25,Chennai,Fruits,Grocery,18415
+152,Male,28,Chennai,Running Shoes,Sports,29851
+153,Female,28,Mumbai,Running Shoes,Sports,24630
+154,Male,31,Hyderabad,Tennis Racket,Sports,30780
+155,Male,42,Hyderabad,Headphones,Electronics,18722
+156,Female,26,Hyderabad,Football,Sports,31159
+157,Male,31,Chennai,Smartwatch,Electronics,58931
+158,Female,21,Bangalore,Smartphone,Electronics,55530
+159,Female,26,Hyderabad,T-shirt,Fashion,20162
+160,Male,51,Bangalore,Tennis Racket,Sports,18901
+161,Female,56,Bangalore,Laptop,Electronics,37905
+162,Male,54,Delhi,Handbag,Fashion,26524
+163,Female,49,Bangalore,Headphones,Electronics,42943
+164,Male,57,Delhi,Headphones,Electronics,38109
+165,Male,26,Bangalore,Handbag,Fashion,45980
+166,Female,47,Chennai,Smartphone,Electronics,37000
+167,Female,33,Bangalore,Milk,Grocery,51710
+168,Male,37,Delhi,Shoes,Fashion,12579
+169,Female,50,Hyderabad,Rice,Grocery,59621
+170,Female,38,Hyderabad,Tennis Racket,Sports,52501
+171,Female,40,Hyderabad,Jeans,Fashion,5396
+172,Female,53,Hyderabad,Vegetables,Grocery,620
+173,Female,22,Chennai,Cricket Bat,Sports,468
+174,Female,37,Bangalore,Tennis Racket,Sports,5576
+175,Female,20,Bangalore,Jeans,Fashion,34708
+176,Female,59,Hyderabad,Handbag,Fashion,33338
+177,Female,42,Delhi,Football,Sports,47251
+178,Male,29,Mumbai,Jeans,Fashion,41640
+179,Male,55,Chennai,Gym Gloves,Sports,44037
+180,Female,28,Bangalore,Milk,Grocery,32455
+181,Female,18,Chennai,Jacket,Fashion,32457
+182,Female,55,Hyderabad,Tennis Racket,Sports,45519
+183,Male,45,Delhi,Running Shoes,Sports,37552
+184,Male,37,Delhi,Milk,Grocery,58211
+185,Female,39,Chennai,Laptop,Electronics,57106
+186,Female,27,Delhi,Tennis Racket,Sports,44127
+187,Male,31,Hyderabad,Tennis Racket,Sports,43363
+188,Female,36,Delhi,Snacks,Grocery,31246
+189,Male,18,Delhi,Snacks,Grocery,39267
+190,Male,60,Delhi,Rice,Grocery,853
+191,Male,30,Chennai,Rice,Grocery,1106
+192,Male,51,Chennai,Jeans,Fashion,30841
+193,Female,39,Chennai,Headphones,Electronics,2960
+194,Female,28,Hyderabad,Tablet,Electronics,46670
+195,Female,41,Hyderabad,Running Shoes,Sports,16180
+196,Male,54,Bangalore,Cricket Bat,Sports,47223
+197,Male,57,Chennai,Football,Sports,10288
+198,Female,27,Mumbai,Snacks,Grocery,39056
+199,Female,25,Hyderabad,Vegetables,Grocery,33659
+200,Male,24,Chennai,Smartphone,Electronics,27597
+201,Female,25,Bangalore,T-shirt,Fashion,15992
+202,Male,50,Hyderabad,T-shirt,Fashion,35368
+203,Female,48,Hyderabad,T-shirt,Fashion,35789
+204,Female,19,Hyderabad,Vegetables,Grocery,25153
+205,Male,48,Hyderabad,Jacket,Fashion,20263
+206,Female,30,Mumbai,Vegetables,Grocery,12712
+207,Male,40,Hyderabad,Running Shoes,Sports,45995
+208,Male,53,Delhi,Jacket,Fashion,40019
+209,Male,52,Chennai,Rice,Grocery,58253
+210,Male,20,Delhi,Tennis Racket,Sports,27636
+211,Female,31,Chennai,Headphones,Electronics,21080
+212,Male,38,Mumbai,Handbag,Fashion,3966
+213,Female,37,Mumbai,Handbag,Fashion,23222
+214,Female,34,Mumbai,Milk,Grocery,1756
+215,Male,30,Delhi,Handbag,Fashion,24236
+216,Male,43,Bangalore,Snacks,Grocery,39355
+217,Male,23,Mumbai,Headphones,Electronics,33210
+218,Female,58,Mumbai,Football,Sports,11075
+219,Male,27,Bangalore,Smartwatch,Electronics,34089
+220,Male,36,Mumbai,Smartwatch,Electronics,26063
+221,Female,21,Chennai,Gym Gloves,Sports,36565
+222,Male,38,Delhi,Headphones,Electronics,743
+223,Female,22,Hyderabad,Running Shoes,Sports,52237
+224,Female,49,Hyderabad,Milk,Grocery,56408
+225,Female,51,Hyderabad,Rice,Grocery,33936
+226,Female,46,Chennai,Milk,Grocery,9040
+227,Female,23,Bangalore,Cricket Bat,Sports,12897
+228,Male,25,Bangalore,Rice,Grocery,26977
+229,Male,46,Delhi,Tennis Racket,Sports,18760
+230,Female,24,Bangalore,Smartphone,Electronics,36651
+231,Female,56,Hyderabad,Football,Sports,13246
+232,Female,31,Delhi,Gym Gloves,Sports,25818
+233,Female,25,Mumbai,Tablet,Electronics,38196
+234,Female,27,Chennai,Headphones,Electronics,40052
+235,Male,46,Hyderabad,Running Shoes,Sports,2298
+236,Male,18,Bangalore,Smartwatch,Electronics,31881
+237,Female,43,Chennai,Smartwatch,Electronics,31224
+238,Female,37,Chennai,Vegetables,Grocery,1968
+239,Male,35,Chennai,Laptop,Electronics,53050
+240,Female,33,Mumbai,Smartwatch,Electronics,58621
+241,Male,45,Bangalore,Shoes,Fashion,26098
+242,Male,20,Delhi,Laptop,Electronics,17648
+243,Male,34,Bangalore,Smartphone,Electronics,42574
+244,Male,30,Bangalore,Jacket,Fashion,28377
+245,Male,41,Mumbai,Smartwatch,Electronics,16965
+246,Female,43,Hyderabad,Tennis Racket,Sports,402
+247,Male,37,Mumbai,Laptop,Electronics,39969
+248,Male,31,Mumbai,Laptop,Electronics,30809
+249,Male,22,Hyderabad,T-shirt,Fashion,44827
+250,Female,31,Hyderabad,Snacks,Grocery,7326
+251,Female,59,Bangalore,Handbag,Fashion,35505
+252,Male,32,Chennai,Shoes,Fashion,14340
+253,Male,18,Delhi,Rice,Grocery,38777
+254,Male,52,Bangalore,Tablet,Electronics,21013
+255,Male,22,Hyderabad,Vegetables,Grocery,15766
+256,Female,41,Mumbai,Vegetables,Grocery,32788
+257,Female,26,Hyderabad,Football,Sports,16387
+258,Female,20,Chennai,Smartphone,Electronics,20840
+259,Male,38,Chennai,Snacks,Grocery,6336
+260,Male,52,Delhi,Headphones,Electronics,44472
+261,Male,54,Chennai,Tablet,Electronics,2617
+262,Female,48,Delhi,Tablet,Electronics,58089
+263,Male,48,Mumbai,Gym Gloves,Sports,59932
+264,Female,40,Chennai,T-shirt,Fashion,22206
+265,Female,52,Hyderabad,Jacket,Fashion,13492
+266,Male,42,Hyderabad,Cricket Bat,Sports,44673
+267,Female,24,Delhi,Cricket Bat,Sports,11388
+268,Male,35,Bangalore,Shoes,Fashion,44732
+269,Female,28,Bangalore,Running Shoes,Sports,32973
+270,Female,54,Chennai,Cricket Bat,Sports,51316
+271,Female,51,Hyderabad,Snacks,Grocery,9856
+272,Male,22,Bangalore,Tennis Racket,Sports,5098
+273,Female,45,Bangalore,Shoes,Fashion,13132
+274,Female,60,Hyderabad,Smartwatch,Electronics,59163
+275,Female,56,Hyderabad,Rice,Grocery,59300
+276,Male,20,Mumbai,Handbag,Fashion,17138
+277,Male,53,Chennai,Handbag,Fashion,12764
+278,Male,51,Mumbai,Snacks,Grocery,11210
+279,Female,57,Mumbai,Smartwatch,Electronics,36854
+280,Female,60,Bangalore,Rice,Grocery,42845
+281,Female,59,Bangalore,Headphones,Electronics,53186
+282,Female,54,Delhi,Handbag,Fashion,13326
+283,Male,20,Chennai,Vegetables,Grocery,3862
+284,Female,19,Chennai,Running Shoes,Sports,21442
+285,Female,22,Delhi,Fruits,Grocery,32703
+286,Male,49,Mumbai,Jeans,Fashion,19401
+287,Male,59,Bangalore,T-shirt,Fashion,45732
+288,Female,60,Mumbai,Milk,Grocery,13461
+289,Female,39,Chennai,Smartwatch,Electronics,58445
+290,Male,45,Hyderabad,Snacks,Grocery,53463
+291,Female,50,Chennai,Handbag,Fashion,17489
+292,Male,27,Chennai,Smartphone,Electronics,29409
+293,Male,59,Chennai,Headphones,Electronics,58002
+294,Female,37,Mumbai,Milk,Grocery,12117
+295,Female,34,Hyderabad,T-shirt,Fashion,41200
+296,Male,32,Chennai,Laptop,Electronics,30399
+297,Male,25,Chennai,Football,Sports,19853
+298,Male,46,Bangalore,T-shirt,Fashion,45425
+299,Male,38,Bangalore,Shoes,Fashion,57784
+300,Female,42,Bangalore,Gym Gloves,Sports,6814
+301,Female,38,Chennai,Snacks,Grocery,1084
+302,Male,39,Bangalore,Milk,Grocery,34968
+303,Male,30,Chennai,Gym Gloves,Sports,21867
+304,Female,37,Mumbai,Rice,Grocery,49707
+305,Female,19,Mumbai,Fruits,Grocery,14719
+306,Male,42,Mumbai,Shoes,Fashion,55867
+307,Female,21,Mumbai,Gym Gloves,Sports,32134
+308,Male,44,Chennai,Tennis Racket,Sports,28855
+309,Male,58,Delhi,Laptop,Electronics,23690
+310,Male,26,Hyderabad,Tennis Racket,Sports,6809
+311,Female,53,Mumbai,Rice,Grocery,20959
+312,Female,57,Delhi,Shoes,Fashion,18860
+313,Female,20,Delhi,Smartwatch,Electronics,25377
+314,Male,34,Delhi,Fruits,Grocery,31266
+315,Female,35,Chennai,Gym Gloves,Sports,6509
+316,Male,59,Delhi,Vegetables,Grocery,46068
+317,Female,59,Mumbai,Handbag,Fashion,5405
+318,Male,59,Bangalore,Running Shoes,Sports,20284
+319,Female,23,Chennai,Laptop,Electronics,41744
+320,Female,35,Chennai,Tablet,Electronics,22681
+321,Male,24,Delhi,Tennis Racket,Sports,51971
+322,Male,57,Mumbai,Vegetables,Grocery,4918
+323,Female,25,Chennai,Gym Gloves,Sports,28591
+324,Female,49,Delhi,Handbag,Fashion,53894
+325,Male,38,Mumbai,Gym Gloves,Sports,36462
+326,Female,31,Chennai,Smartwatch,Electronics,49397
+327,Female,34,Hyderabad,Jeans,Fashion,36937
+328,Female,28,Mumbai,Cricket Bat,Sports,50926
+329,Male,35,Chennai,T-shirt,Fashion,50027
+330,Male,38,Mumbai,Laptop,Electronics,16848
+331,Female,37,Hyderabad,Jeans,Fashion,35801
+332,Female,32,Hyderabad,Cricket Bat,Sports,38402
+333,Female,26,Bangalore,T-shirt,Fashion,23246
+334,Male,50,Bangalore,Cricket Bat,Sports,30475
+335,Female,45,Delhi,Smartphone,Electronics,6403
+336,Female,33,Bangalore,Vegetables,Grocery,55187
+337,Male,52,Chennai,Vegetables,Grocery,35851
+338,Female,29,Chennai,Rice,Grocery,12536
+339,Female,33,Hyderabad,Milk,Grocery,23054
+340,Female,19,Hyderabad,Milk,Grocery,26553
+341,Male,36,Delhi,Laptop,Electronics,20197
+342,Male,43,Hyderabad,Fruits,Grocery,12001
+343,Female,60,Delhi,Handbag,Fashion,16138
+344,Female,49,Mumbai,Running Shoes,Sports,14461
+345,Female,31,Delhi,Vegetables,Grocery,14049
+346,Male,38,Chennai,Smartphone,Electronics,55189
+347,Female,23,Bangalore,Football,Sports,22075
+348,Female,30,Bangalore,T-shirt,Fashion,35887
+349,Male,30,Chennai,Headphones,Electronics,59084
+350,Female,34,Mumbai,Smartwatch,Electronics,12144
+351,Female,30,Mumbai,Jeans,Fashion,15173
+352,Female,37,Chennai,Cricket Bat,Sports,30168
+353,Male,42,Hyderabad,Jacket,Fashion,27418
+354,Male,58,Mumbai,Gym Gloves,Sports,58535
+355,Male,19,Bangalore,Milk,Grocery,27984
+356,Female,52,Delhi,Running Shoes,Sports,26551
+357,Male,24,Chennai,Football,Sports,17578
+358,Female,26,Mumbai,Smartwatch,Electronics,2124
+359,Male,56,Mumbai,Milk,Grocery,5221
+360,Female,39,Mumbai,Headphones,Electronics,45361
+361,Female,22,Hyderabad,Laptop,Electronics,36633
+362,Male,59,Bangalore,Snacks,Grocery,53466
+363,Female,42,Bangalore,Cricket Bat,Sports,43408
+364,Male,31,Hyderabad,Smartphone,Electronics,16202
+365,Female,37,Mumbai,Tennis Racket,Sports,58533
+366,Female,21,Hyderabad,Cricket Bat,Sports,3724
+367,Male,18,Bangalore,Tablet,Electronics,19818
+368,Male,55,Mumbai,Rice,Grocery,11717
+369,Male,31,Mumbai,Tennis Racket,Sports,57878
+370,Female,44,Delhi,Jacket,Fashion,1346
+371,Male,57,Chennai,Milk,Grocery,17644
+372,Male,47,Bangalore,Fruits,Grocery,28764
+373,Male,50,Chennai,Fruits,Grocery,17773
+374,Male,25,Delhi,Jeans,Fashion,1098
+375,Female,46,Hyderabad,Headphones,Electronics,24721
+376,Female,23,Delhi,Tablet,Electronics,13638
+377,Female,46,Delhi,Snacks,Grocery,16068
+378,Male,45,Mumbai,Football,Sports,21501
+379,Female,40,Bangalore,Handbag,Fashion,46497
+380,Male,53,Mumbai,Tennis Racket,Sports,34219
+381,Male,52,Bangalore,Snacks,Grocery,42946
+382,Male,47,Delhi,Fruits,Grocery,7088
+383,Male,22,Delhi,Milk,Grocery,37295
+384,Female,60,Hyderabad,Jacket,Fashion,50395
+385,Female,32,Mumbai,Tennis Racket,Sports,39438
+386,Female,39,Hyderabad,Jacket,Fashion,53996
+387,Female,19,Chennai,Football,Sports,55002
+388,Male,19,Mumbai,Jacket,Fashion,49962
+389,Male,55,Mumbai,Handbag,Fashion,31047
+390,Female,50,Chennai,Laptop,Electronics,22157
+391,Male,44,Delhi,Rice,Grocery,59904
+392,Female,46,Bangalore,Running Shoes,Sports,20388
+393,Female,46,Chennai,Jeans,Fashion,16222
+394,Female,24,Hyderabad,Laptop,Electronics,37067
+395,Female,60,Chennai,Football,Sports,19939
+396,Male,23,Chennai,Cricket Bat,Sports,22459
+397,Male,49,Chennai,Milk,Grocery,32538
+398,Female,20,Mumbai,Vegetables,Grocery,58057
+399,Male,24,Mumbai,Tennis Racket,Sports,5707
+400,Female,19,Bangalore,Football,Sports,38753`;
+
+export default function Dashboard({ user }) {
+  const { dataset, hasDataset, loadDataset } = useDataset();
+  const [message, setMessage] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [products, setProducts] = useState(null);
+  const [ageSpending, setAgeSpending] = useState(null);
+  const [genderDist, setGenderDist] = useState(null);
+  const [locationDist, setLocationDist] = useState(null);
+
+  // Parse default dataset on mount
+  useEffect(() => {
+    if (!hasDataset) {
+      const result = parseCSV(DEFAULT_DATASET_CSV);
+      if (result.success) {
+        loadDataset(result.data);
+      }
+    }
+  }, []);
+
+  // Generate analytics when dataset changes
+  useEffect(() => {
+    if (hasDataset && dataset) {
+      try {
+        setSummary(calculateSummary(dataset));
+        setProducts(getProductPopularity(dataset));
+        setAgeSpending(getAgeGroupSpending(dataset));
+        setGenderDist(getGenderDistribution(dataset));
+        setLocationDist(getLocationDistribution(dataset));
+      } catch (err) {
+        console.error('Error generating analytics:', err);
+        setMessage(`Error: ${err.message}`);
+      }
+    }
+  }, [dataset, hasDataset]);
+
+  /**
+   * Handle dataset loaded
+   */
+  const handleDatasetLoaded = (data, msg) => {
+    if (data) {
+      loadDataset(data);
+      setMessage(msg);
+    } else {
+      setMessage(msg);
+    }
+  };
+
+  /**
+   * Initialize default dataset
+   */
+  const initializeDefaultDataset = () => {
+    const result = parseCSV(DEFAULT_DATASET_CSV);
+    if (result.success) {
+      loadDataset(result.data);
+      setMessage('Default dataset loaded');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">📊 InsightCart Analytics Dashboard</h1>
+              <p className="text-gray-600 mt-1">AI-powered insights into your customer data</p>
+            </div>
+            <div className="flex items-center gap-4">
+              {user && (
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Welcome back,</p>
+                  <p className="text-lg font-semibold text-gray-900">{user.name}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Navigation Buttons */}
+          <div className="mt-4 flex flex-wrap gap-3">
+            {hasDataset && (
+              <>
+                <button
+                  onClick={() => window.goToPage('chat')}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-200"
+                >
+                  💬 Open AI Chat
+                </button>
+                <button
+                  onClick={() => window.goToPage('recommendations')}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition duration-200"
+                >
+                  🚀 Get Recommendations
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => window.goToPage('about')}
+              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition duration-200"
+            >
+              ℹ️ About Us
+            </button>
+            <button
+              onClick={() => window.logout()}
+              className="px-6 py-2 bg-red-100 hover:bg-red-200 text-red-800 font-semibold rounded-lg transition duration-200"
+            >
+              🚪 Logout
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        {/* Upload Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">📁 Load Data</h2>
+          <Upload 
+            onDatasetLoaded={handleDatasetLoaded}
+            defaultDataset={undefined}
+          />
+        </div>
+
+        {/* Message Display */}
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg ${message.includes('Error') ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`}>
+            {message}
+          </div>
+        )}
+
+        {/* Summary Cards */}
+        {hasDataset && (
+          <>
+            <div className="mb-8">
+              <SummaryCards summary={summary} />
+            </div>
+
+            {/* Charts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              <ProductPopularityChart data={products} />
+              <AgeSpendingChart data={ageSpending} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <GenderDistributionChart data={genderDist} />
+              <LocationDistributionChart data={locationDist} />
+            </div>
+
+            {/* Data Info */}
+            <div className="mt-8 bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">📈 Dataset Info</h3>
+              <p className="text-gray-600">
+                Total Records: <span className="font-bold">{dataset.length}</span>
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                Data is stored locally in your browser and will be available when you return.
+              </p>
+            </div>
+          </>
+        )}
+
+        {!hasDataset && (
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <p className="text-gray-600 mb-4">No dataset loaded yet</p>
+            <button
+              onClick={initializeDefaultDataset}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-200"
+            >
+              Load Sample Dataset
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
